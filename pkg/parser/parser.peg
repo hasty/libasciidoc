@@ -2618,8 +2618,12 @@ InlineTableCell <-
         return types.NewInlineTableCell(content.(*types.RawLine))
     }
 
+InlineTableCellCharacters <- "\\|" / [^|\r\n]
+
+InlineTableCellEnd <- ("|" / "\r" / "\n")
+
 InlineTableCellContent <- 
-    content:([^|\r\n]* {
+    content:(InlineTableCellCharacters* & InlineTableCellEnd{
         return string(c.text), nil
     }) {
         return types.NewRawLine(content.(string))

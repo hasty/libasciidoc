@@ -76,6 +76,52 @@ var _ = Describe("tables", func() {
 			Expect(ParseDocument(source)).To(MatchDocument(expected))
 		})
 
+		It("1-line table with escaped pipes", func() {
+			source := `[frame=ends,grid=rows]
+|===
+| A \| B  | C \| D
+|===
+`
+			expected := &types.Document{
+				Elements: []interface{}{
+					&types.Table{
+						Attributes: types.Attributes{
+							types.AttrFrame: "ends",
+							types.AttrGrid:  "rows",
+						},
+						Rows: []*types.TableRow{
+							{
+								Cells: []*types.TableCell{
+									{
+										Elements: []interface{}{
+											&types.Paragraph{
+												Elements: []interface{}{
+													&types.StringElement{
+														Content: "A \\| B",
+													},
+												},
+											},
+										},
+									},
+									{
+										Elements: []interface{}{
+											&types.Paragraph{
+												Elements: []interface{}{
+													&types.StringElement{
+														Content: "C \\| D",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(ParseDocument(source)).To(MatchDocument(expected))
+		})
 		It("1-line table with 3 cells", func() {
 			source := `|===
 | *cookie* cookie  | _pasta_  | chocolate
