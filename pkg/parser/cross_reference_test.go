@@ -348,7 +348,8 @@ image::cookie.png[Cookie]
 								{
 									Cells: []*types.TableCell{
 										{
-											Format: "a",
+											Format:    "a",
+											Formatter: &types.TableCellFormat{Style: "a", Content: "a"},
 											Elements: []interface{}{
 												&types.ImageBlock{
 													Attributes: types.Attributes{

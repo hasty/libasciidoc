@@ -102,8 +102,12 @@ func reparseTable(ctx *ParseContext, t *types.Table) error {
 
 func reparseTableCell(ctx *ParseContext, c *types.TableCell) error {
 	log.Debugf("reparsing content of table cell")
-	switch c.Format {
-	case "a":
+	var style = types.DefaultStyle
+	if c.Formatter != nil {
+		style = c.Formatter.Style
+	}
+	switch style {
+	case types.AsciidocStyle:
 		opts := append(ctx.opts, Entrypoint("DelimitedBlockElements"))
 		elements, err := reparseElements(c.Elements, opts...)
 		if err != nil {

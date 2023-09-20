@@ -2600,8 +2600,39 @@ TableEndDelimiter <- TableDelimiter / EOF
 TableLine <-
     !TableEndDelimiter
     content:(
-        (cells:(InlineTableCells / MultilineTableCells) {
-            return types.NewTableRow(cells.([]interface{}))
+        (cells:(MultilineTableCells) {
+            var rows []*types.TableRow
+            var lines []interface{}
+             ci := cells.([]interface{})
+            for _, c := range ci {
+                lines = append(lines, c)
+                if mlc, ok := c.(*types.TableCell); ok {
+                    if len(mlc.Elements) == 0 {
+                        continue
+                    }
+                    if rl, ok := mlc.Elements[len(mlc.Elements) - 1].(*types.RawLine); ok && rl.EOL {
+                        tr, err := types.NewTableRow(lines)
+                        if err != nil {
+                            return nil, err
+                        }
+                        rows = append(rows, tr)
+                        lines = make([]interface{}, 0)
+                        continue
+                    }
+                }
+            }
+            if len(lines) > 0 {
+                tr, err := types.NewTableRow(lines)
+                if err != nil {
+                    return nil, err
+                }
+                rows = append(rows, tr)
+            }
+            if len(rows) == 1 {
+                return rows[0], nil
+            }
+           
+            return rows, nil
         })
         / BlankLine
     ) {
@@ -2618,7 +2649,7 @@ InlineTableCell <-
         return types.NewInlineTableCell(content.(*types.RawLine))
     }
 
-InlineTableCellCharacters <- "\\|" / [^|\r\n]
+InlineTableCellCharacters <- ("\\|" / [^|\r\n])
 
 InlineTableCellEnd <- ("|" / "\r" / "\n")
 
@@ -2641,19 +2672,30 @@ MultilineTableCell <-
         return types.NewMultilineTableCell(content.([]interface{}), format)
     }
 
+MultilineTableCellEnd <- ("|" / "\r" / "\n")
+
 MultilineTableCellContent <- 
     (
         !TableEndDelimiter
         !BlankLine
         !(format:(TableCellFormat)? "|")
-        content:([^|\r\n]* {
+        content:(InlineTableCellCharacters* & MultilineTableCellEnd {
             return string(c.text), nil
-        }) EOL? {
-            return types.NewRawLine(content.(string))
+        }) eol:EOL? {
+            rl, err := types.NewRawLine(content.(string))
+            if err != nil {
+                return nil, err
+            }
+            if eol != nil {
+                rl.EOL = true
+            }
+            return rl, nil
         }
     )*
 
-TableCellFormat <- [^ |\r\n]* {
+TableCellFormatCharacters <- "\\|" / [^ |\r\n]
+
+TableCellFormat <- TableCellFormatCharacters* {
     return string(c.text), nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -3276,6 +3277,7 @@ func (f *FileInclusion) SetAttributes(attributes Attributes) {
 // -------------------------------------------------------------------------------------
 type RawLine struct {
 	Content string
+	EOL     bool
 }
 
 // NewRawLine returns a new RawLine wrapper for the given string
@@ -3725,21 +3727,39 @@ func NewTable(lines []interface{}) (*Table, error) {
 	if len(lines) == 0 {
 		return &Table{}, nil
 	}
-	header, rows := scanTableElements(lines)
+	header, rows := scanTableElements(splitTableElements(lines))
 	return &Table{
 		Header: header,
 		Rows:   rows,
 	}, nil
 }
 
+func splitTableElements(rows []interface{}) (out []interface{}) {
+	for _, r := range rows {
+		switch row := r.(type) {
+		case []*TableRow:
+			for _, r := range row {
+				out = append(out, r)
+			}
+		default:
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
 func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 	// check first 2 elements, expecting a row followed by a blankline as the optional header row
 	if len(rows) > 2 {
 		if header, ok := rows[0].(*TableRow); ok {
+			extractFormats(header)
+			rowLength := alignTableRowFormats(header)
 			if _, ok := rows[1].(*BlankLine); ok {
-				rows := organizeTableCells(rows[2:], len(header.Cells))
+				rows := organizeTableCells(rows[2:], rowLength)
 				return header, rows
 			}
+			rows := organizeTableCells(rows[1:], rowLength)
+			return header, rows
 		}
 	}
 	rowLength := 1
@@ -3753,11 +3773,106 @@ func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 	return nil, body
 }
 
+var tableFormatPattern = regexp.MustCompile(`^(?:(?P<ColumnSpan>[0-9]+)?(?:\.(?P<RowSpan>[0-9]+))?\+)?(?:(?P<Duplication>[0-9]+)\*)?(?P<HorizontalAlignment>[<>^])?(?P<VerticalAlignment>\.[<>^])?(?P<Style>[adehlms])?$`)
+
+func extractFormats(row *TableRow) {
+	if len(row.Cells) < 2 {
+		return
+	}
+
+	for i, cell := range row.Cells[1:] {
+		format := cell.Format
+		if len(format) > 0 && tableFormatPattern.MatchString(format) {
+			continue
+		}
+		prevCell := row.Cells[i]
+		if len(prevCell.Elements) == 0 {
+			rl, _ := NewRawLine(format)
+			prevCell.Elements = append(prevCell.Elements, rl)
+			cell.Format = ""
+			continue
+		}
+		para, ok := prevCell.Elements[0].(*Paragraph)
+		if !ok || len(para.Elements) != 0 {
+			continue
+		}
+		fmt, _ := NewStringElement(cell.Format)
+		para.Elements = append(para.Elements, fmt)
+		cell.Format = ""
+	}
+}
+
+func alignTableRowFormats(row *TableRow) int {
+	totalWidth := 0
+	var nextFormat *TableCellFormat
+	for _, cell := range row.Cells {
+		width := 1
+		if nextFormat != nil {
+			cell.Formatter = nextFormat
+			cell.Format = nextFormat.Content
+			if nextFormat.ColumnSpan > 0 {
+				width = nextFormat.ColumnSpan
+			}
+			nextFormat = nil
+		}
+		if len(cell.Elements) > 0 {
+			if raw, ok := cell.Elements[0].(*RawLine); ok {
+				raw.Content, nextFormat = extractTableFormat(raw.Content)
+			} else if para, ok := cell.Elements[0].(*Paragraph); ok {
+				if len(para.Elements) > 0 {
+					if s, ok := para.Elements[0].(*StringElement); ok {
+						s.Content, nextFormat = extractTableFormat(s.Content)
+					}
+				}
+			}
+		}
+		totalWidth += width
+	}
+	return totalWidth
+}
+
+var prefixedTableFormatPattern = regexp.MustCompile(`\s+(?:(?P<ColumnSpan>[0-9]+)?(?:\.(?P<RowSpan>[0-9]+))?\+)?(?:(?P<Duplication>[0-9]+)\*)?(?P<HorizontalAlignment>[<>^])?(?P<VerticalAlignment>\.[<>^])?(?P<Style>[adehlms])?$`)
+
+func extractTableFormat(cell string) (string, *TableCellFormat) {
+	matches := prefixedTableFormatPattern.FindStringSubmatch(cell)
+	if matches == nil {
+		return cell, nil
+	}
+	foundGroup := false
+	format := &TableCellFormat{}
+	for i, name := range prefixedTableFormatPattern.SubexpNames() {
+		match := matches[i]
+		if i == 0 || len(match) == 0 {
+			continue
+		}
+		foundGroup = true
+		switch name {
+		case "ColumnSpan":
+			format.ColumnSpan, _ = strconv.Atoi(matches[i])
+		case "RowSpan":
+			format.RowSpan, _ = strconv.Atoi(matches[i])
+		case "Duplication":
+			format.RowSpan, _ = strconv.Atoi(matches[i])
+		case "Style":
+			format.Style = ContentStyle(matches[i])
+		}
+	}
+	if !foundGroup {
+		return cell, nil
+	}
+	match := prefixedTableFormatPattern.FindStringIndex(cell)
+	format.Content = strings.TrimSpace(cell[match[0]:])
+	cell = cell[0:match[0]]
+	return cell, format
+}
+
 func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
 	// add all cells in a single slice, then group by rows
 	cells := make([]*TableCell, 0, len(elements))
 	for _, e := range elements {
 		if e, ok := e.(*TableRow); ok { // silently ignore 'BlankLines'
+			extractFormats(e)
+			alignTableRowFormats(e)
 			cells = append(cells, e.Cells...)
 		}
 	}
@@ -4111,8 +4226,37 @@ func (r *TableRow) SetElements(elements []interface{}) error {
 }
 
 type TableCell struct {
-	Format   string
-	Elements []interface{}
+	Format    string
+	Formatter *TableCellFormat
+	Elements  []interface{}
+}
+
+type TableCellHorizontalAlignment int
+
+const (
+	NoHorizontal TableCellHorizontalAlignment = iota
+	Left
+	Center
+	Right
+)
+
+type TableCellVerticalAlignment int
+
+const (
+	NoVertical TableCellVerticalAlignment = iota
+	Top
+	Middle
+	Bottom
+)
+
+type TableCellFormat struct {
+	ColumnSpan          int
+	RowSpan             int
+	Duplication         int
+	HorizontalAlignment TableCellHorizontalAlignment
+	VerticalAlignment   TableCellVerticalAlignment
+	Style               ContentStyle
+	Content             string
 }
 
 func NewInlineTableCell(content *RawLine) (*TableCell, error) {
@@ -4135,6 +4279,22 @@ func NewMultilineTableCell(elements []interface{}, format interface{}) (*TableCe
 	}
 	if format, ok := format.(string); ok {
 		c.Format = format
+		switch format {
+		case "a":
+			c.Formatter = &TableCellFormat{Style: AsciidocStyle, Content: format}
+		case "d":
+			c.Formatter = &TableCellFormat{Style: DefaultStyle, Content: format}
+		case "e":
+			c.Formatter = &TableCellFormat{Style: EmphasisStyle, Content: format}
+		case "h":
+			c.Formatter = &TableCellFormat{Style: HeaderStyle, Content: format}
+		case "l":
+			c.Formatter = &TableCellFormat{Style: LiteralStyle, Content: format}
+		case "m":
+			c.Formatter = &TableCellFormat{Style: MonospaceStyle, Content: format}
+		case "s":
+			c.Formatter = &TableCellFormat{Style: StrongStyle, Content: format}
+		}
 	}
 	return c, nil
 }

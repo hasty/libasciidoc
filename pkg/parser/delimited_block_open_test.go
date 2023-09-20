@@ -77,7 +77,8 @@ image::another-image.png[]
 										{
 											Cells: []*types.TableCell{
 												{
-													Format: "a",
+													Format:    "a",
+													Formatter: &types.TableCellFormat{Style: "a", Content: "a"},
 													Elements: []interface{}{
 														&types.ImageBlock{
 															Attributes: types.Attributes{
@@ -91,7 +92,8 @@ image::another-image.png[]
 													},
 												},
 												{
-													Format: "a",
+													Format:    "a",
+													Formatter: &types.TableCellFormat{Style: "a", Content: "a"},
 													Elements: []interface{}{
 														&types.ImageBlock{
 															Attributes: types.Attributes{
