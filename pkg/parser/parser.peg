@@ -2600,7 +2600,7 @@ TableEndDelimiter <- TableDelimiter / EOF
 TableLine <-
     !TableEndDelimiter
     content:(
-        (cells:(MultilineTableCells) {
+        (cells:(TableCells) {
             var rows []*types.TableRow
             var lines []interface{}
              ci := cells.([]interface{})
@@ -2639,47 +2639,28 @@ TableLine <-
         return content, nil
     }
 
-InlineTableCells <- cells:(InlineTableCell)+ EOL { 
+TableCellCharacters <- ("\\|" / [^|\r\n])
+
+TableCells <- cells:(TableCell)+ {
     return cells, nil
 }
 
-InlineTableCell <- 
-    "|" Space* content:(InlineTableCellContent) // no format specifier supported when cells are "inline"
-    {
-        return types.NewInlineTableCell(content.(*types.RawLine))
-    }
-
-InlineTableCellCharacters <- ("\\|" / [^|\r\n])
-
-InlineTableCellEnd <- ("|" / "\r" / "\n")
-
-InlineTableCellContent <- 
-    content:(InlineTableCellCharacters* & InlineTableCellEnd{
-        return string(c.text), nil
-    }) {
-        return types.NewRawLine(content.(string))
-    }
-
-MultilineTableCells <- cells:(MultilineTableCell)+ {
-    return cells, nil
-}
-
-MultilineTableCell <- 
+TableCell <- 
     !TableEndDelimiter
     !BlankLine
-    format:(TableCellFormat)? "|" Space* Newline? content:(MultilineTableCellContent)
+    format:(TableCellFormat)? "|" Space* Newline? content:(TableCellContent)
     {
         return types.NewMultilineTableCell(content.([]interface{}), format)
     }
 
-MultilineTableCellEnd <- ("|" / "\r" / "\n")
+TableCellEnd <- ("|" / "\r" / "\n")
 
-MultilineTableCellContent <- 
+TableCellContent <- 
     (
         !TableEndDelimiter
         !BlankLine
         !(format:(TableCellFormat)? "|")
-        content:(InlineTableCellCharacters* & MultilineTableCellEnd {
+        content:(TableCellCharacters* & TableCellEnd {
             return string(c.text), nil
         }) eol:EOL? {
             rl, err := types.NewRawLine(content.(string))
