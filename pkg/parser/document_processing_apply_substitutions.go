@@ -152,8 +152,10 @@ func applySubstitutionsOnTable(ctx *ParseContext, t *types.Table, opts ...Option
 	}
 
 	// rows and cells
-	if cols, ok := t.Attributes[types.AttrCols].([]interface{}); ok {
-		t.SetColumnDefinitions(cols)
+	if !ctx.ignoreColDefs {
+		if cols, ok := t.Attributes[types.AttrCols].([]interface{}); ok {
+			t.SetColumnDefinitions(cols)
+		}
 	}
 	if t.Header != nil {
 		for _, c := range t.Header.Cells {

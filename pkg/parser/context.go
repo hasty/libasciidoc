@@ -16,6 +16,8 @@ type ParseContext struct {
 	attributes   *contextAttributes
 	userMacros   map[string]configuration.MacroTemplate
 	counters     map[string]interface{}
+
+	ignoreColDefs bool
 }
 
 func NewParseContext(config *configuration.Configuration, options ...Option) *ParseContext {
@@ -38,6 +40,10 @@ func NewParseContext(config *configuration.Configuration, options ...Option) *Pa
 		userMacros:   config.Macros,
 		counters:     map[string]interface{}{},
 	}
+}
+
+func (c *ParseContext) IgnoreColumnDefs(b bool) {
+	c.ignoreColDefs = b
 }
 
 func (c *ParseContext) Clone() *ParseContext {
