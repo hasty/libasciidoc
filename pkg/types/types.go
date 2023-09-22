@@ -3923,10 +3923,7 @@ var _ WithElements = &Table{}
 
 // return the optional header line and the cell lines
 func (t *Table) GetElements() []interface{} {
-	rows := make([]interface{}, len(t.Rows))
-	for i, l := range t.Rows {
-		rows[i] = l
-	}
+	rows, _, _ := t.rows()
 	return rows
 }
 
