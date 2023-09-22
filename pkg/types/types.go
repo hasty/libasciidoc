@@ -1876,16 +1876,19 @@ func NewInlineElements(elements ...interface{}) ([]interface{}, error) {
 
 // InternalCrossReference the struct for Cross References
 type InternalCrossReference struct {
-	ID    interface{}
-	Label interface{}
+	ID         interface{}
+	OriginalID interface{}
+	Label      interface{}
 }
 
 // NewInternalCrossReference initializes a new `InternalCrossReference` from the given ID
 func NewInternalCrossReference(id, label interface{}) (*InternalCrossReference, error) {
 	// log.Debugf("new InternalCrossReference with ID=%s", id)
+	id = Reduce(id)
 	return &InternalCrossReference{
-		ID:    Reduce(id),
-		Label: Reduce(label),
+		ID:         id,
+		OriginalID: id,
+		Label:      Reduce(label),
 	}, nil
 }
 
@@ -3734,15 +3737,15 @@ func NewTable(lines []interface{}) (*Table, error) {
 	}, nil
 }
 
-func splitTableElements(rows []interface{}) (out []interface{}) {
-	for _, r := range rows {
-		switch row := r.(type) {
+func splitTableElements(lines []interface{}) (out []interface{}) {
+	for _, l := range lines {
+		switch line := l.(type) {
 		case []*TableRow:
-			for _, r := range row {
+			for _, r := range line {
 				out = append(out, r)
 			}
 		default:
-			out = append(out, row)
+			out = append(out, line)
 		}
 	}
 	return out
@@ -3814,6 +3817,10 @@ func alignTableRowFormats(row *TableRow) int {
 				width = nextFormat.ColumnSpan
 			}
 			nextFormat = nil
+		} else if cell.Formatter != nil {
+			if cell.Formatter.ColumnSpan > 0 {
+				width = cell.Formatter.ColumnSpan
+			}
 		}
 		if len(cell.Elements) > 0 {
 			if raw, ok := cell.Elements[0].(*RawLine); ok {
@@ -3835,8 +3842,21 @@ var prefixedTableFormatPattern = regexp.MustCompile(`\s+(?:(?P<ColumnSpan>[0-9]+
 
 func extractTableFormat(cell string) (string, *TableCellFormat) {
 	matches := prefixedTableFormatPattern.FindStringSubmatch(cell)
-	if matches == nil {
+	format := parseTableCellFormat(matches)
+	if format == nil {
 		return cell, nil
+	}
+	match := prefixedTableFormatPattern.FindStringIndex(cell)
+	format.Content = strings.TrimSpace(cell[match[0]:])
+	cell = cell[0:match[0]]
+
+	return cell, format
+}
+
+func parseTableCellFormat(matches []string) *TableCellFormat {
+
+	if matches == nil {
+		return nil
 	}
 	foundGroup := false
 	format := &TableCellFormat{}
@@ -3858,12 +3878,9 @@ func extractTableFormat(cell string) (string, *TableCellFormat) {
 		}
 	}
 	if !foundGroup {
-		return cell, nil
+		return nil
 	}
-	match := prefixedTableFormatPattern.FindStringIndex(cell)
-	format.Content = strings.TrimSpace(cell[match[0]:])
-	cell = cell[0:match[0]]
-	return cell, format
+	return format
 }
 
 func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
@@ -3882,10 +3899,23 @@ func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
 		r := &TableRow{}
 		rows = append(rows, r)
 		l := int(math.Min(float64(len(cells)), float64(rowLength)))
-		r.Cells = make([]*TableCell, l)
-		copy(r.Cells, cells[:l])
-		cells = cells[l:]
+		r.Cells = make([]*TableCell, 0, l)
+		cellCount := 0
+		for len(cells) > 0 {
+			c := cells[0]
+			if c.Formatter != nil && c.Formatter.ColumnSpan > 0 {
+				cellCount += c.Formatter.ColumnSpan
+			} else {
+				cellCount++
+			}
+			r.Cells = append(r.Cells, c)
+			cells = cells[1:]
+			if cellCount >= l {
+				break
+			}
+		}
 	}
+
 	return rows
 }
 
@@ -4279,21 +4309,9 @@ func NewMultilineTableCell(elements []interface{}, format interface{}) (*TableCe
 	}
 	if format, ok := format.(string); ok {
 		c.Format = format
-		switch format {
-		case "a":
-			c.Formatter = &TableCellFormat{Style: AsciidocStyle, Content: format}
-		case "d":
-			c.Formatter = &TableCellFormat{Style: DefaultStyle, Content: format}
-		case "e":
-			c.Formatter = &TableCellFormat{Style: EmphasisStyle, Content: format}
-		case "h":
-			c.Formatter = &TableCellFormat{Style: HeaderStyle, Content: format}
-		case "l":
-			c.Formatter = &TableCellFormat{Style: LiteralStyle, Content: format}
-		case "m":
-			c.Formatter = &TableCellFormat{Style: MonospaceStyle, Content: format}
-		case "s":
-			c.Formatter = &TableCellFormat{Style: StrongStyle, Content: format}
+		c.Formatter = parseTableCellFormat(tableFormatPattern.FindStringSubmatch(format))
+		if c.Formatter != nil {
+			c.Formatter.Content = format
 		}
 	}
 	return c, nil
