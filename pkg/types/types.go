@@ -3756,7 +3756,8 @@ func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 	if len(rows) > 2 {
 		if header, ok := rows[0].(*TableRow); ok {
 			extractFormats(header)
-			rowLength := alignTableRowFormats(header)
+			alignTableRowFormats(header)
+			rowLength := getTableRowWidth(header)
 			if _, ok := rows[1].(*BlankLine); ok {
 				rows := organizeTableCells(rows[2:], rowLength)
 				return header, rows
@@ -3768,7 +3769,7 @@ func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 	rowLength := 1
 	for _, e := range rows {
 		if r, ok := e.(*TableRow); ok {
-			rowLength = len(r.Cells)
+			rowLength = getTableRowWidth(r)
 			break
 		}
 	}
@@ -3805,22 +3806,13 @@ func extractFormats(row *TableRow) {
 	}
 }
 
-func alignTableRowFormats(row *TableRow) int {
-	totalWidth := 0
+func alignTableRowFormats(row *TableRow) {
 	var nextFormat *TableCellFormat
 	for _, cell := range row.Cells {
-		width := 1
 		if nextFormat != nil {
 			cell.Formatter = nextFormat
 			cell.Format = nextFormat.Content
-			if nextFormat.ColumnSpan > 0 {
-				width = nextFormat.ColumnSpan
-			}
 			nextFormat = nil
-		} else if cell.Formatter != nil {
-			if cell.Formatter.ColumnSpan > 0 {
-				width = cell.Formatter.ColumnSpan
-			}
 		}
 		if len(cell.Elements) > 0 {
 			if raw, ok := cell.Elements[0].(*RawLine); ok {
@@ -3831,6 +3823,18 @@ func alignTableRowFormats(row *TableRow) int {
 						s.Content, nextFormat = extractTableFormat(s.Content)
 					}
 				}
+			}
+		}
+	}
+}
+
+func getTableRowWidth(row *TableRow) int {
+	totalWidth := 0
+	for _, cell := range row.Cells {
+		width := 1
+		if cell.Formatter != nil {
+			if cell.Formatter.ColumnSpan > 0 {
+				width = cell.Formatter.ColumnSpan
 			}
 		}
 		totalWidth += width
