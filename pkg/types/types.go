@@ -2,7 +2,6 @@ package types
 
 import (
 	"fmt"
-	"math"
 	"net/url"
 	"regexp"
 	"sort"
@@ -53,6 +52,10 @@ type WithLocation interface {
 
 type Referencable interface {
 	Reference(refs ElementReferences)
+}
+
+type SourcePosition struct {
+	Line, Col, Offset int
 }
 
 // ------------------------------------------
@@ -3863,7 +3866,7 @@ func parseTableCellFormat(matches []string) *TableCellFormat {
 		return nil
 	}
 	foundGroup := false
-	format := &TableCellFormat{}
+	format := &TableCellFormat{ColumnSpan: 1, RowSpan: 1}
 	for i, name := range prefixedTableFormatPattern.SubexpNames() {
 		match := matches[i]
 		if i == 0 || len(match) == 0 {
@@ -3899,22 +3902,41 @@ func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
 	}
 	log.Debugf("dispatching %d cells in rows of %d cells", len(cells), rowLength)
 	rows := make([]*TableRow, 0, int(len(cells)/rowLength)+1)
+	colSkip := make(map[int]int)
 	for len(cells) > 0 {
 		r := &TableRow{}
 		rows = append(rows, r)
-		l := int(math.Min(float64(len(cells)), float64(rowLength)))
-		r.Cells = make([]*TableCell, 0, l)
-		cellCount := 0
+		r.Cells = make([]*TableCell, 0, rowLength)
+		cellIndex := 0
 		for len(cells) > 0 {
-			c := cells[0]
-			if c.Formatter != nil && c.Formatter.ColumnSpan > 0 {
-				cellCount += c.Formatter.ColumnSpan
-			} else {
-				cellCount++
+			skip, ok := colSkip[cellIndex]
+			if ok && skip > 0 {
+				colSkip[cellIndex] = skip - 1
+				cellIndex++
+				r.Cells = append(r.Cells, &TableCell{Blank: true})
+				if cellIndex >= rowLength {
+					break
+				}
+				continue
 			}
+			c := cells[0]
 			r.Cells = append(r.Cells, c)
+			if c.Formatter != nil {
+				if c.Formatter.RowSpan > 1 {
+					colSkip[cellIndex] = c.Formatter.RowSpan - 1
+				}
+				cellIndex++
+				if c.Formatter.ColumnSpan > 1 {
+					for i := 0; i < c.Formatter.ColumnSpan-1; i++ {
+						r.Cells = append(r.Cells, &TableCell{Blank: true})
+						cellIndex++
+					}
+				}
+			} else {
+				cellIndex++
+			}
 			cells = cells[1:]
-			if cellCount >= l {
+			if cellIndex >= rowLength {
 				break
 			}
 		}
@@ -4260,6 +4282,7 @@ type TableCell struct {
 	Format    string
 	Formatter *TableCellFormat
 	Elements  []interface{}
+	Blank     bool
 }
 
 type TableCellHorizontalAlignment int

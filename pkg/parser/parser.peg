@@ -2602,27 +2602,28 @@ TableLine <-
     content:(
         (cells:(TableCells) {
             var rows []*types.TableRow
-            var lines []interface{}
+            var cs []interface{}
              ci := cells.([]interface{})
             for _, c := range ci {
-                lines = append(lines, c)
+                cs = append(cs, c)
                 if mlc, ok := c.(*types.TableCell); ok {
                     if len(mlc.Elements) == 0 {
                         continue
                     }
-                    if rl, ok := mlc.Elements[len(mlc.Elements) - 1].(*types.RawLine); ok && rl.EOL {
-                        tr, err := types.NewTableRow(lines)
+                    rl, ok := mlc.Elements[len(mlc.Elements) - 1].(*types.RawLine)
+                    if ok && rl.EOL {
+                        tr, err := types.NewTableRow(cs)
                         if err != nil {
                             return nil, err
                         }
                         rows = append(rows, tr)
-                        lines = make([]interface{}, 0)
+                        cs = make([]interface{}, 0)
                         continue
                     }
                 }
             }
-            if len(lines) > 0 {
-                tr, err := types.NewTableRow(lines)
+            if len(cs) > 0 {
+                tr, err := types.NewTableRow(cs)
                 if err != nil {
                     return nil, err
                 }
@@ -2659,10 +2660,10 @@ TableCellContent <-
     (
         !TableEndDelimiter
         !BlankLine
-        !(format:(TableCellFormat)? "|")
+        !(format: Space* (TableCellFormat)? "|")
         content:(TableCellCharacters* & TableCellEnd {
             return string(c.text), nil
-        }) eol:EOL? {
+        }) eol:(EOL Space+ / EOL)? {
             rl, err := types.NewRawLine(content.(string))
             if err != nil {
                 return nil, err
