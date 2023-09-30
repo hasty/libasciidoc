@@ -646,8 +646,9 @@ func (a *AttributeDeclaration) RawText() string {
 
 // AttributeReset the type for AttributeReset
 type AttributeReset struct {
-	Name    string
-	rawText string
+	Attributes Attributes
+	Name       string
+	rawText    string
 }
 
 // NewAttributeReset initializes a new Document Attribute Resets.
@@ -661,6 +662,23 @@ func NewAttributeReset(attrName string, rawText string) (*AttributeReset, error)
 
 func (a *AttributeReset) RawText() string {
 	return a.rawText
+}
+
+var _ WithAttributes = &AttributeReset{}
+
+// GetAttributes returns the attributes of this element
+func (ar *AttributeReset) GetAttributes() Attributes {
+	return ar.Attributes
+}
+
+// AddAttributes adds the attributes of this element
+func (ar *AttributeReset) AddAttributes(attributes Attributes) {
+	ar.Attributes = ar.Attributes.AddAll(attributes)
+}
+
+// SetAttributes sets the attributes in this element
+func (ar *AttributeReset) SetAttributes(attributes Attributes) {
+	ar.Attributes = attributes
 }
 
 // AttributeReference the type for AttributeReference
