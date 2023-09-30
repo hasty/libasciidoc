@@ -2652,7 +2652,7 @@ TableCells <- cells:(TableCell)+ {
 TableCell <- 
     !TableEndDelimiter
     !BlankLine
-    format:(TableCellFormat)? "|" Space* Newline? content:(TableCellContent)
+    Space* format:(TableCellFormat)? "|" Space* Newline? content:(TableCellContent)
     {
         return types.NewMultilineTableCell(content.([]interface{}), format)
     }
