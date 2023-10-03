@@ -3774,23 +3774,36 @@ func splitTableElements(lines []interface{}) (out []interface{}) {
 
 func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 	// check first 2 elements, expecting a row followed by a blankline as the optional header row
-	if len(rows) > 2 {
-		if header, ok := rows[0].(*TableRow); ok {
-			extractFormats(header)
-			alignTableRowFormats(header)
-			rowLength := getTableRowWidth(header)
-			if _, ok := rows[1].(*BlankLine); ok {
-				rows := organizeTableCells(rows[2:], rowLength)
-				return header, rows
+	if len(rows) > 1 {
+		var blankLineIndex int
+		for i, r := range rows {
+			if _, ok := r.(*BlankLine); ok && i+1 != len(rows) {
+				blankLineIndex = i
+				break
 			}
-			rows := organizeTableCells(rows[1:], rowLength)
-			return header, rows
+		}
+		var headerRow []*TableCell
+		if blankLineIndex > 0 {
+			for _, r := range rows[0:blankLineIndex] {
+				if row, ok := r.(*TableRow); ok {
+					headerRow = append(headerRow, row.Cells...)
+				}
+			}
+		} else if header, ok := rows[0].(*TableRow); ok {
+			headerRow = header.Cells
+		}
+		if len(headerRow) > 0 {
+			extractFormats(headerRow)
+			alignTableRowFormats(headerRow)
+			rowLength := getTableRowWidth(headerRow)
+			rows := organizeTableCells(rows, rowLength)
+			return rows[0], rows[1:]
 		}
 	}
 	rowLength := 1
 	for _, e := range rows {
 		if r, ok := e.(*TableRow); ok {
-			rowLength = getTableRowWidth(r)
+			rowLength = getTableRowWidth(r.Cells)
 			break
 		}
 	}
@@ -3800,17 +3813,17 @@ func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 
 var tableFormatPattern = regexp.MustCompile(`^(?:(?P<ColumnSpan>[0-9]+)?(?:\.(?P<RowSpan>[0-9]+))?\+)?(?:(?P<Duplication>[0-9]+)\*)?(?P<HorizontalAlignment>[<>^])?(?P<VerticalAlignment>\.[<>^])?(?P<Style>[adehlms])?$`)
 
-func extractFormats(row *TableRow) {
-	if len(row.Cells) < 2 {
+func extractFormats(cells []*TableCell) {
+	if len(cells) < 2 {
 		return
 	}
 
-	for i, cell := range row.Cells[1:] {
+	for i, cell := range cells[1:] {
 		format := cell.Format
 		if len(format) > 0 && tableFormatPattern.MatchString(format) {
 			continue
 		}
-		prevCell := row.Cells[i]
+		prevCell := cells[i]
 		if len(prevCell.Elements) == 0 {
 			rl, _ := NewRawLine(format)
 			prevCell.Elements = append(prevCell.Elements, rl)
@@ -3827,31 +3840,43 @@ func extractFormats(row *TableRow) {
 	}
 }
 
-func alignTableRowFormats(row *TableRow) {
+func alignTableRowFormats(cells []*TableCell) {
 	var nextFormat *TableCellFormat
-	for _, cell := range row.Cells {
+	for _, cell := range cells {
 		if nextFormat != nil {
 			cell.Formatter = nextFormat
 			cell.Format = nextFormat.Content
 			nextFormat = nil
 		}
 		if len(cell.Elements) > 0 {
-			if raw, ok := cell.Elements[0].(*RawLine); ok {
-				raw.Content, nextFormat = extractTableFormat(raw.Content)
-			} else if para, ok := cell.Elements[0].(*Paragraph); ok {
-				if len(para.Elements) > 0 {
-					if s, ok := para.Elements[0].(*StringElement); ok {
-						s.Content, nextFormat = extractTableFormat(s.Content)
+			for i := len(cell.Elements) - 1; i >= 0; i-- {
+				e := cell.Elements[i]
+				if p, ok := e.(*Paragraph); ok {
+					for j := len(p.Elements) - 1; j >= 0; j-- {
+						if s, ok := p.Elements[j].(*StringElement); ok {
+							s.Content, nextFormat = extractTableFormat(s.Content)
+						}
+						if nextFormat != nil {
+							break
+						}
 					}
+				} else if rl, ok := e.(*RawLine); ok {
+					rl.Content, nextFormat = extractTableFormat(rl.Content)
+				}
+				if nextFormat != nil {
+					break
 				}
 			}
 		}
 	}
 }
 
-func getTableRowWidth(row *TableRow) int {
+func getTableRowWidth(cells []*TableCell) int {
 	totalWidth := 0
-	for _, cell := range row.Cells {
+	for _, cell := range cells {
+		if cell.Blank {
+			continue
+		}
 		width := 1
 		if cell.Formatter != nil {
 			if cell.Formatter.ColumnSpan > 0 {
@@ -3908,17 +3933,32 @@ func parseTableCellFormat(matches []string) *TableCellFormat {
 	return format
 }
 
+func getCellValue(cell *TableCell) (val string) {
+	for _, e := range cell.Elements {
+		if p, ok := e.(*Paragraph); ok {
+			for _, e := range p.Elements {
+				if s, ok := e.(*StringElement); ok {
+					val = s.Content
+				}
+			}
+		}
+	}
+	return
+}
+
 func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
 	// add all cells in a single slice, then group by rows
 	cells := make([]*TableCell, 0, len(elements))
 	for _, e := range elements {
 		if e, ok := e.(*TableRow); ok { // silently ignore 'BlankLines'
-			extractFormats(e)
-			alignTableRowFormats(e)
+			extractFormats(e.Cells)
+			alignTableRowFormats(e.Cells)
 			cells = append(cells, e.Cells...)
 		}
 	}
+
 	log.Debugf("dispatching %d cells in rows of %d cells", len(cells), rowLength)
+	//fmt.Printf("dispatching %d cells in rows of %d cells\n", len(cells), rowLength)
 	rows := make([]*TableRow, 0, int(len(cells)/rowLength)+1)
 	colSkip := make(map[int]int)
 	for len(cells) > 0 {
@@ -3938,14 +3978,22 @@ func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
 				continue
 			}
 			c := cells[0]
+			cells = cells[1:]
+			if c.Blank { // We skip blanks added before we had cols definitions
+				continue
+			}
 			r.Cells = append(r.Cells, c)
 			if c.Formatter != nil {
 				if c.Formatter.RowSpan > 1 {
 					colSkip[cellIndex] = c.Formatter.RowSpan - 1
 				}
 				cellIndex++
-				if c.Formatter.ColumnSpan > 1 {
-					for i := 0; i < c.Formatter.ColumnSpan-1; i++ {
+				if cellIndex >= rowLength {
+					break
+				}
+				colspan := c.Formatter.ColumnSpan
+				if colspan > 1 {
+					for i := 0; i < colspan-1; i++ {
 						r.Cells = append(r.Cells, &TableCell{Blank: true})
 						cellIndex++
 					}
@@ -3953,7 +4001,6 @@ func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
 			} else {
 				cellIndex++
 			}
-			cells = cells[1:]
 			if cellIndex >= rowLength {
 				break
 			}
@@ -3972,20 +4019,17 @@ func (t *Table) GetElements() []interface{} {
 }
 
 func (t *Table) SetElements(elements []interface{}) error {
+	t.Header = nil
+	t.Footer = nil
+
 	if len(elements) == 0 {
 		t.Rows = nil
 		return nil
 	}
-	rows := make([]*TableRow, len(elements))
-	for i, e := range elements {
-		switch e := e.(type) {
-		case *TableRow:
-			rows[i] = e
-		default:
-			return errors.Errorf("unexpected type of table row: '%T'", e)
-		}
-	}
+	header, rows := scanTableElements(elements)
+	t.Header = header
 	t.Rows = rows
+
 	return nil
 }
 
@@ -4008,6 +4052,7 @@ func (t *Table) SetAttributes(attributes Attributes) {
 }
 
 func (t *Table) reorganizeRows() {
+
 	// if `header` option, then make sure that the first row is the header
 	if t.Header == nil && len(t.Rows) > 0 && t.Attributes.HasOption("header") {
 		t.Header = t.Rows[0]
@@ -4022,25 +4067,34 @@ func (t *Table) reorganizeRows() {
 
 func (t *Table) SetColumnDefinitions(cols []interface{}) {
 	size := 0
-	for _, c := range cols {
+	for i, c := range cols {
 		if c, ok := c.(*TableColumn); ok {
 			size += c.Multiplier
+			if i == len(cols)-1 {
+				if c.Multiplier == 1 && c.HAlign == HAlignDefault && c.VAlign == VAlignDefault && !c.Autowidth && c.Weight == 1 && len(c.Style) == 0 {
+					size++
+				}
+			}
 		}
 	}
+
 	log.Debugf("re-organizing table in rows of %d cells", size)
+	//fmt.Printf("re-organizing table in rows of %d cells\n", size)
 	// reorganize rows/columns
 
 	rows, header, footer := t.rows()
+
 	t.Rows = organizeTableCells(rows, size)
 	// restore header and footer
-	if header || t.Attributes.HasOption("header") {
+	if (header || t.Attributes.HasOption("header")) && len(t.Rows) > 1 {
 		t.Header = t.Rows[0]
 		t.Rows = t.Rows[1:]
 	}
-	if footer || t.Attributes.HasOption("footer") {
+	if (footer || t.Attributes.HasOption("footer")) && len(t.Rows) > 1 {
 		t.Footer = t.Rows[len(t.Rows)-1]
 		t.Rows = t.Rows[:len(t.Rows)-1]
 	}
+
 }
 
 func (t *Table) rows() ([]interface{}, bool, bool) {
@@ -4049,6 +4103,8 @@ func (t *Table) rows() ([]interface{}, bool, bool) {
 	if t.Header != nil {
 		header = true
 		rows = append(rows, t.Header)
+		bl, _ := NewBlankLine()
+		rows = append(rows, bl)
 	}
 	for _, r := range t.Rows {
 		rows = append(rows, r)

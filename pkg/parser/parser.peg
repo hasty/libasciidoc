@@ -2607,23 +2607,30 @@ TableLine <-
             var rows []*types.TableRow
             var cs []interface{}
              ci := cells.([]interface{})
+
             for _, c := range ci {
                 cs = append(cs, c)
-                if mlc, ok := c.(*types.TableCell); ok {
-                    if len(mlc.Elements) == 0 {
-                        continue
-                    }
-                    rl, ok := mlc.Elements[len(mlc.Elements) - 1].(*types.RawLine)
-                    if ok && rl.EOL {
-                        tr, err := types.NewTableRow(cs)
-                        if err != nil {
-                            return nil, err
+                switch mlc := c.(type) {
+                    case *types.TableCell:
+                        if len(mlc.Elements) == 0 {
+                            continue
                         }
-                        rows = append(rows, tr)
-                        cs = make([]interface{}, 0)
-                        continue
-                    }
+                        switch rl := mlc.Elements[len(mlc.Elements) - 1].(type) {
+                            case *types.RawLine:
+                                if rl.EOL {
+                                    tr, err := types.NewTableRow(cs)
+                                    if err != nil {
+                                        return nil, err
+                                    }
+                                    rows = append(rows, tr)
+                                    cs = make([]interface{}, 0)
+                                    continue
+                                }
+                                
+                        }
                 }
+                    
+                
             }
             if len(cs) > 0 {
                 tr, err := types.NewTableRow(cs)
@@ -2652,9 +2659,15 @@ TableCells <- cells:(TableCell)+ {
 TableCell <- 
     !TableEndDelimiter
     !BlankLine
-    Space* format:(TableCellFormat)? "|" Space* Newline? content:(TableCellContent)
+    Space* format:(TableCellFormat)? "|" Space* eol:(Newline)? content:(TableCellContent)
     {
-        return types.NewMultilineTableCell(content.([]interface{}), format)
+        cl := content.([]interface{})
+        if len(cl) == 0 && eol != nil  {
+            rl, _ := types.NewRawLine("")
+            rl.EOL = true
+            cl = append(cl, rl)
+        }
+        return types.NewMultilineTableCell(cl, format)
     }
 
 TableCellEnd <- ("|" / "\r" / "\n")
@@ -2685,9 +2698,9 @@ TableCellFormat <- TableCellFormatCharacters* {
 }
 
 // rule for the optional `cols` attribute on a Table
-TableColumnsAttribute <- cols:(Column)* EOF {
+TableColumnsAttribute <- "\""? cols:(Column)* ("\"" / EOF) {
         return cols, nil
-    }
+    } 
 
 Column <- 
     NotEOF
