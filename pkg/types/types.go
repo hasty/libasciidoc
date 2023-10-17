@@ -4068,14 +4068,30 @@ func (t *Table) reorganizeRows() {
 func (t *Table) SetColumnDefinitions(cols []interface{}) {
 	size := 0
 	for i, c := range cols {
-		if c, ok := c.(*TableColumn); ok {
-			size += c.Multiplier
-			if i == len(cols)-1 {
-				if c.Multiplier == 1 && c.HAlign == HAlignDefault && c.VAlign == VAlignDefault && !c.Autowidth && c.Weight == 1 && len(c.Style) == 0 {
-					size++
-				}
-			}
+		c, ok := c.(*TableColumn)
+		if !ok {
+			continue
 		}
+		size += c.Multiplier
+		if i < len(cols)-1 {
+			continue
+		}
+		if c.Multiplier != 1 || c.MultiplierSpecified {
+			continue
+		}
+		if c.HAlign != HAlignDefault || c.HAlignSpecified {
+			continue
+		}
+		if c.VAlign != VAlignDefault || c.VAlignSpecified {
+			continue
+		}
+		if c.Weight != 1 || c.WeightSpecified {
+			continue
+		}
+		if c.Autowidth || len(c.Style) > 0 {
+			continue
+		}
+		size++
 	}
 
 	log.Debugf("re-organizing table in rows of %d cells", size)
@@ -4185,31 +4201,40 @@ const (
 )
 
 type TableColumn struct {
-	Multiplier int
-	HAlign     HAlign
-	VAlign     VAlign
-	Weight     int
-	Width      string // computed value
-	Style      ContentStyle
-	Autowidth  bool
+	Multiplier          int
+	MultiplierSpecified bool
+	HAlign              HAlign
+	HAlignSpecified     bool
+	VAlign              VAlign
+	VAlignSpecified     bool
+	Weight              int
+	WeightSpecified     bool
+	Width               string // computed value
+	Style               ContentStyle
+	Autowidth           bool
 }
 
 func NewTableColumn(multiplier, halign, valign, weight, style interface{}) (*TableColumn, error) {
 	col := newDefaultTableColumn()
 	if multiplier, ok := multiplier.(int); ok {
 		col.Multiplier = multiplier
+		col.MultiplierSpecified = true
 	}
 	if halign, ok := halign.(HAlign); ok {
 		col.HAlign = halign
+		col.HAlignSpecified = true
 	}
 	if valign, ok := valign.(VAlign); ok {
 		col.VAlign = valign
+		col.VAlignSpecified = true
 	}
 	if weight == "~" {
 		col.Autowidth = true
 		col.Weight = 0
+		col.WeightSpecified = true
 	} else if weight, ok := weight.(int); ok {
 		col.Weight = weight
+		col.WeightSpecified = true
 	}
 	if style, ok := style.(string); ok {
 		col.Style = ContentStyle(style)

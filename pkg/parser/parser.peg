@@ -2720,7 +2720,7 @@ Column <-
     weight:(Integer / ("~" { return string(c.text), nil }))?
     style:([adehlms] { return string(c.text), nil })?
     // style:(("a" / "e" / "h" / "l" / "m" / "s") { return string(c.text), nil })?
-    comma:(",")?
+    comma:((",")? / &"\"")
     &{
         // make sure that at least something was set
         // (otherwise the parser will run indefinitely)
@@ -2734,6 +2734,7 @@ Column <-
     {
         return types.NewTableColumn(multiplier, halign, valign, weight, style)
     }
+
 
 // -------------------------------------------------------------------------------------
 // Thematic break
