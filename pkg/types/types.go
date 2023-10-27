@@ -2985,8 +2985,32 @@ func NewIfdefCondition(name string, attr interface{}) (*IfdefCondition, error) {
 
 var _ ConditionalInclusion = &IfdefCondition{}
 
+func evalDirective(directive string, attributes map[string]interface{}) bool {
+	var found bool
+	if strings.Contains(directive, ",") {
+		attr := strings.Split(directive, ",")
+		for _, a := range attr {
+			_, found = attributes[strings.TrimSpace(a)]
+			if found {
+				break
+			}
+		}
+	} else if strings.Contains(directive, "+") {
+		attr := strings.Split(directive, "+")
+		for _, a := range attr {
+			_, found = attributes[strings.TrimSpace(a)]
+			if !found {
+				break
+			}
+		}
+	} else {
+		_, found = attributes[directive]
+	}
+	return found
+}
+
 func (c *IfdefCondition) Eval(attributes map[string]interface{}) bool {
-	_, found := attributes[c.Name]
+	found := evalDirective(c.Name, attributes)
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.Debugf("eval of IfDef::'%s': %t", c.Name, found)
 	}
@@ -3016,7 +3040,10 @@ func NewIfndefCondition(name string, attr interface{}) (*IfndefCondition, error)
 var _ ConditionalInclusion = &IfndefCondition{}
 
 func (c *IfndefCondition) Eval(attributes map[string]interface{}) bool {
-	_, found := attributes[c.Name]
+	found := evalDirective(c.Name, attributes)
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.Debugf("eval of IfNDef::'%s': %t", c.Name, !found)
+	}
 	return !found
 }
 
