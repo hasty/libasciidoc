@@ -471,8 +471,8 @@ func open(path string) (*os.File, string, func(), error) {
 	if err != nil {
 		return nil, "", func() {}, err
 	}
-	absPath, err := filepath.Abs(path)
-	if err != nil {
+	absPath := path
+	/*if err != nil {
 		return nil, "", func() {
 			log.Debugf("restoring current working dir to: %s", wd)
 			if err := os.Chdir(wd); err != nil { // restore the previous working directory
@@ -490,7 +490,7 @@ func open(path string) (*os.File, string, func(), error) {
 				log.WithError(err).Error("failed to restore previous working directory")
 			}
 		}, err
-	}
+	}*/
 	// read the file per-se
 	// log.Debugf("opening '%s'", absPath)
 	f, err := os.Open(absPath)
