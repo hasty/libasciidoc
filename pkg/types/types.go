@@ -3985,7 +3985,6 @@ func organizeTableCells(elements []interface{}, rowLength int) []*TableRow {
 	}
 
 	log.Debugf("dispatching %d cells in rows of %d cells", len(cells), rowLength)
-	//fmt.Printf("dispatching %d cells in rows of %d cells\n", len(cells), rowLength)
 	rows := make([]*TableRow, 0, int(len(cells)/rowLength)+1)
 	colSkip := make(map[int]int)
 	for len(cells) > 0 {
@@ -4094,35 +4093,16 @@ func (t *Table) reorganizeRows() {
 
 func (t *Table) SetColumnDefinitions(cols []interface{}) {
 	size := 0
-	for i, c := range cols {
+	for _, c := range cols {
 		c, ok := c.(*TableColumn)
 		if !ok {
 			continue
 		}
 		size += c.Multiplier
-		if i < len(cols)-1 {
-			continue
-		}
-		if c.Multiplier != 1 || c.MultiplierSpecified {
-			continue
-		}
-		if c.HAlign != HAlignDefault || c.HAlignSpecified {
-			continue
-		}
-		if c.VAlign != VAlignDefault || c.VAlignSpecified {
-			continue
-		}
-		if c.Weight != 1 || c.WeightSpecified {
-			continue
-		}
-		if c.Autowidth || len(c.Style) > 0 {
-			continue
-		}
-		size++
+
 	}
 
 	log.Debugf("re-organizing table in rows of %d cells", size)
-	//fmt.Printf("re-organizing table in rows of %d cells\n", size)
 	// reorganize rows/columns
 
 	rows, header, footer := t.rows()

@@ -293,11 +293,22 @@ func reparseAttributes(ctx *ParseContext, element types.WithAttributes, opts ...
 			if err != nil {
 				return err
 			}
-			v, err := parseWithSubstitutions(s, attributeSubstitutions(), append(append(ctx.opts, Entrypoint("TableColumnsAttribute")), opts...)...)
-			if err != nil {
-				return err
+			var columns []interface{}
+			cols := strings.Split(s, ",")
+			for _, c := range cols {
+				v, err := parseWithSubstitutions(c, attributeSubstitutions(), append(append(ctx.opts, Entrypoint("TableColumnsAttribute")), opts...)...)
+				if err != nil {
+					return err
+				}
+				if len(v) > 0 {
+					columns = append(columns, v...)
+				} else {
+					tc, _ := types.NewTableColumn(nil, nil, nil, nil, nil)
+					columns = append(columns, tc)
+				}
+
 			}
-			attrs[k] = types.Reduce(v)
+			attrs[k] = types.Reduce(columns)
 		default:
 			attrs[k] = v
 		}
