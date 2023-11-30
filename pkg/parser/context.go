@@ -17,7 +17,8 @@ type ParseContext struct {
 	userMacros   map[string]configuration.MacroTemplate
 	counters     map[string]interface{}
 
-	ignoreColDefs bool
+	ignoreColDefs      bool
+	ignoreFileIncludes bool
 }
 
 func NewParseContext(config *configuration.Configuration, options ...Option) *ParseContext {
@@ -33,17 +34,22 @@ func NewParseContext(config *configuration.Configuration, options ...Option) *Pa
 	}
 	opts = append(opts, options...)
 	return &ParseContext{
-		filename:     config.Filename,
-		opts:         opts,
-		levelOffsets: []*levelOffset{},
-		attributes:   newContextAttributes(config.Attributes),
-		userMacros:   config.Macros,
-		counters:     map[string]interface{}{},
+		filename:           config.Filename,
+		opts:               opts,
+		levelOffsets:       []*levelOffset{},
+		attributes:         newContextAttributes(config.Attributes),
+		userMacros:         config.Macros,
+		counters:           map[string]interface{}{},
+		ignoreFileIncludes: config.IgnoreIncludes,
 	}
 }
 
 func (c *ParseContext) IgnoreColumnDefs(b bool) {
 	c.ignoreColDefs = b
+}
+
+func (c *ParseContext) IgnoreFileIncludes(b bool) {
+	c.ignoreFileIncludes = b
 }
 
 func (c *ParseContext) Clone() *ParseContext {

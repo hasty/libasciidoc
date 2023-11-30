@@ -53,11 +53,18 @@ func preprocess(ctx *ParseContext, source io.Reader) (string, error) {
 			case *types.RawSection:
 				b.WriteString(ctx.levelOffsets.apply(e))
 			case *types.FileInclusion:
-				f, err := includeFile(ctx.Clone(), e)
-				if err != nil {
-					return "", err
+				if !b.enabled {
+					break
 				}
-				b.WriteString(f)
+				if ctx.ignoreFileIncludes {
+					b.WriteString(e.RawText)
+				} else {
+					f, err := includeFile(ctx.Clone(), e)
+					if err != nil {
+						return "", err
+					}
+					b.WriteString(f)
+				}
 			case *types.BlockDelimiter:
 				t.track(e.Kind, e.Length)
 				ctx.opts = append(ctx.opts, t.withinDelimitedBlock())

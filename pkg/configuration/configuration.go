@@ -38,6 +38,7 @@ type Configuration struct {
 	CSS                   []string
 	BackEnd               string
 	Macros                map[string]MacroTemplate
+	IgnoreIncludes        bool
 }
 
 const (
