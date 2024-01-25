@@ -2717,6 +2717,7 @@ Column <-
         / ".>" { return types.VAlignBottom, nil }
         / ".^" { return types.VAlignMiddle, nil }
     )?
+    percentage:Percentage?
     weight:(Integer / ("~" { return string(c.text), nil }))?
     style:([adehlms] { return string(c.text), nil })?
     // style:(("a" / "e" / "h" / "l" / "m" / "s") { return string(c.text), nil })?
@@ -2728,11 +2729,12 @@ Column <-
             halign != nil ||
             valign != nil ||
             weight != nil ||
+            percentage != nil ||
             style != nil ||
             comma != nil, nil
     }
     {
-        return types.NewTableColumn(multiplier, halign, valign, weight, style)
+        return types.NewTableColumn(multiplier, halign, valign, weight, percentage, style)
     }
 
 
@@ -2885,6 +2887,10 @@ Id <- [^[\]<>,]+ { // previously: (Alphanums / (!Newline !Space !"[" !"]" !"<<" 
 
 Number <- Float
     / Integer
+
+Percentage <- percentage:Integer "%" {
+    return percentage, nil
+}
 
 Integer <- ("-"? [0-9]+) {
         return strconv.Atoi(string(c.text))

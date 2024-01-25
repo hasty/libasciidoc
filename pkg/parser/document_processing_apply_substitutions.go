@@ -303,7 +303,7 @@ func reparseAttributes(ctx *ParseContext, element types.WithAttributes, opts ...
 				if len(v) > 0 {
 					columns = append(columns, v...)
 				} else {
-					tc, _ := types.NewTableColumn(nil, nil, nil, nil, nil)
+					tc, _ := types.NewTableColumn(nil, nil, nil, nil, nil, nil)
 					columns = append(columns, tc)
 				}
 

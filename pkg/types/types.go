@@ -4216,12 +4216,14 @@ type TableColumn struct {
 	VAlignSpecified     bool
 	Weight              int
 	WeightSpecified     bool
+	Percentage          int
+	PercentageSpecified bool
 	Width               string // computed value
 	Style               ContentStyle
 	Autowidth           bool
 }
 
-func NewTableColumn(multiplier, halign, valign, weight, style interface{}) (*TableColumn, error) {
+func NewTableColumn(multiplier, halign, valign, weight, percentage, style interface{}) (*TableColumn, error) {
 	col := newDefaultTableColumn()
 	if multiplier, ok := multiplier.(int); ok {
 		col.Multiplier = multiplier
@@ -4242,6 +4244,10 @@ func NewTableColumn(multiplier, halign, valign, weight, style interface{}) (*Tab
 	} else if weight, ok := weight.(int); ok {
 		col.Weight = weight
 		col.WeightSpecified = true
+	}
+	if percentage, ok := percentage.(int); ok {
+		col.Percentage = percentage
+		col.PercentageSpecified = true
 	}
 	if style, ok := style.(string); ok {
 		col.Style = ContentStyle(style)
