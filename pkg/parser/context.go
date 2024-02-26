@@ -17,8 +17,9 @@ type ParseContext struct {
 	userMacros   map[string]configuration.MacroTemplate
 	counters     map[string]interface{}
 
-	ignoreColDefs      bool
-	ignoreFileIncludes bool
+	ignoreColDefs                 bool
+	ignoreFileIncludes            bool
+	suppressAttributeSubstitution bool
 }
 
 func NewParseContext(config *configuration.Configuration, options ...Option) *ParseContext {
@@ -50,6 +51,10 @@ func (c *ParseContext) IgnoreColumnDefs(b bool) {
 
 func (c *ParseContext) IgnoreFileIncludes(b bool) {
 	c.ignoreFileIncludes = b
+}
+
+func (c *ParseContext) SuppressAttributeSubstitution(b bool) {
+	c.suppressAttributeSubstitution = b
 }
 
 func (c *ParseContext) Clone() *ParseContext {

@@ -561,6 +561,9 @@ func replaceAttributeRefsInElements(ctx *ParseContext, elements []interface{}) (
 }
 
 func valueForAttributeRef(ctx *ParseContext, a *types.AttributeReference) (interface{}, bool, error) {
+	if ctx.suppressAttributeSubstitution {
+		return "{" + a.Name + "}", false, nil
+	}
 	v, found := ctx.attributes.get(a.Name)
 	if !found {
 		log.Warnf("unable to find entry for attribute with key '%s' in context", a.Name)
