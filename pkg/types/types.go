@@ -3802,22 +3802,16 @@ func splitTableElements(lines []interface{}) (out []interface{}) {
 func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 	// check first 2 elements, expecting a row followed by a blankline as the optional header row
 	if len(rows) > 1 {
-		var blankLineIndex int
-		for i, r := range rows {
-			if _, ok := r.(*BlankLine); ok && i+1 != len(rows) {
-				blankLineIndex = i
-				break
-			}
-		}
 		var headerRow []*TableCell
-		if blankLineIndex > 0 {
-			for _, r := range rows[0:blankLineIndex] {
-				if row, ok := r.(*TableRow); ok {
-					headerRow = append(headerRow, row.Cells...)
+		if header, ok := rows[0].(*TableRow); ok {
+			if _, ok := rows[1].(*BlankLine); ok {
+				headerRow = header.Cells
 				}
 			}
-		} else if header, ok := rows[0].(*TableRow); ok {
+		if len(headerRow) == 0 {
+			if header, ok := rows[0].(*TableRow); ok {
 			headerRow = header.Cells
+		}
 		}
 		if len(headerRow) > 0 {
 			extractFormats(headerRow)
