@@ -3806,12 +3806,12 @@ func scanTableElements(rows []interface{}) (*TableRow, []*TableRow) {
 		if header, ok := rows[0].(*TableRow); ok {
 			if _, ok := rows[1].(*BlankLine); ok {
 				headerRow = header.Cells
-				}
 			}
+		}
 		if len(headerRow) == 0 {
 			if header, ok := rows[0].(*TableRow); ok {
-			headerRow = header.Cells
-		}
+				headerRow = header.Cells
+			}
 		}
 		if len(headerRow) > 0 {
 			extractFormats(headerRow)
@@ -3943,7 +3943,25 @@ func parseTableCellFormat(matches []string) *TableCellFormat {
 		case "RowSpan":
 			format.RowSpan, _ = strconv.Atoi(matches[i])
 		case "Duplication":
-			format.RowSpan, _ = strconv.Atoi(matches[i])
+			format.Duplication, _ = strconv.Atoi(matches[i])
+		case "HorizontalAlignment":
+			switch matches[i] {
+			case "<":
+				format.HorizontalAlignment = Left
+			case ">":
+				format.HorizontalAlignment = Right
+			case "^":
+				format.HorizontalAlignment = Center
+			}
+		case "VerticalAlignment":
+			switch matches[i] {
+			case ".<":
+				format.VerticalAlignment = Top
+			case ".>":
+				format.VerticalAlignment = Bottom
+			case ".^":
+				format.VerticalAlignment = Middle
+			}
 		case "Style":
 			format.Style = ContentStyle(matches[i])
 		}
